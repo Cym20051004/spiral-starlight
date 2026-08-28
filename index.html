@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>螺旋光芒</title>
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #020711;
+    }
+    .stage {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      background: #020711;
+    }
+    .video-background {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: translate(-50%, -50%) scale(1.18);
+      transform-origin: center;
+      filter: contrast(1.1) saturate(1.08) brightness(1.02);
+      backface-visibility: hidden;
+      opacity: 0;
+      transition: opacity .65s linear;
+      will-change: opacity;
+    }
+    .video-background.is-visible { opacity: 1; }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <video id="videoA" class="video-background" autoplay muted playsinline preload="auto">
+      <source src="spiral-light.mp4" type="video/mp4">
+    </video>
+    <video id="videoB" class="video-background" muted playsinline preload="auto">
+      <source src="spiral-light.mp4" type="video/mp4">
+    </video>
+  </main>
+
+  <script>
+    const cleanStart = 2.6;
+    const cleanEnd = 6.2;
+    const fadeSeconds = .65;
+    const videos = [document.getElementById('videoA'), document.getElementById('videoB')];
+    let active = 0;
+    let transitioning = false;
+    function begin() {
+      videos[0].currentTime = cleanStart;
+      videos[0].classList.add('is-visible');
+      videos[0].play().catch(() => {});
+      requestAnimationFrame(tick);
+    }
+    function tick() {
+      const current = videos[active];
+      if (!transitioning && current.currentTime >= cleanEnd - fadeSeconds) {
+        transitioning = true;
+        const nextIndex = active === 0 ? 1 : 0;
+        const next = videos[nextIndex];
+        next.currentTime = cleanStart;
+        next.play().catch(() => {});
+        next.classList.add('is-visible');
+        setTimeout(() => {
+          current.classList.remove('is-visible');
+          current.pause();
+          current.currentTime = cleanStart;
+          active = nextIndex;
+          transitioning = false;
+        }, fadeSeconds * 1000);
+      }
+      requestAnimationFrame(tick);
+    }
+    videos[0].addEventListener('loadedmetadata', begin, { once: true });
+    if (videos[0].readyState >= 1) begin();
+  </script>
+</body>
+</html>
