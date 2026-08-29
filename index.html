@@ -2,84 +2,184 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#020815">
   <title>螺旋光芒</title>
   <style>
+    * { box-sizing: border-box; }
     html, body {
       margin: 0;
       width: 100%;
       height: 100%;
       overflow: hidden;
-      background: #020711;
+      background: #020815;
     }
-    .stage {
-      position: fixed;
-      inset: 0;
-      overflow: hidden;
-      background: #020711;
-    }
-    .video-background {
-      position: absolute;
-      top: 50%;
-      left: 50%;
+    canvas {
+      display: block;
       width: 100%;
       height: 100%;
-      object-fit: cover;
-      transform: translate(-50%, -50%) scale(1.18);
-      transform-origin: center;
-      filter: contrast(1.1) saturate(1.08) brightness(1.02);
-      backface-visibility: hidden;
-      opacity: 0;
-      transition: opacity .65s linear;
-      will-change: opacity;
+      touch-action: none;
     }
-    .video-background.is-visible { opacity: 1; }
   </style>
 </head>
 <body>
-  <main class="stage">
-    <video id="videoA" class="video-background" autoplay muted playsinline preload="auto">
-      <source src="spiral-light.mp4" type="video/mp4">
-    </video>
-    <video id="videoB" class="video-background" muted playsinline preload="auto">
-      <source src="spiral-light.mp4" type="video/mp4">
-    </video>
-  </main>
-
+  <canvas id="space" aria-label="蓝金色螺旋星空动态作品"></canvas>
   <script>
-    const cleanStart = 2.6;
-    const cleanEnd = 6.2;
-    const fadeSeconds = .65;
-    const videos = [document.getElementById('videoA'), document.getElementById('videoB')];
-    let active = 0;
-    let transitioning = false;
-    function begin() {
-      videos[0].currentTime = cleanStart;
-      videos[0].classList.add('is-visible');
-      videos[0].play().catch(() => {});
-      requestAnimationFrame(tick);
+    const canvas = document.getElementById('space');
+    const ctx = canvas.getContext('2d', { alpha: false });
+    let width = 0;
+    let height = 0;
+    let dpr = 1;
+    let particles = [];
+    let dust = [];
+
+    function makeParticle(index) {
+      const arm = index % 9;
+      const progress = Math.random();
+      return {
+        arm,
+        progress,
+        speed: .000025 + Math.random() * .000035,
+        size: .45 + Math.random() * 1.65,
+        offset: (Math.random() - .5) * .12,
+        warm: Math.random() > .58,
+        alpha: .35 + Math.random() * .65
+      };
     }
-    function tick() {
-      const current = videos[active];
-      if (!transitioning && current.currentTime >= cleanEnd - fadeSeconds) {
-        transitioning = true;
-        const nextIndex = active === 0 ? 1 : 0;
-        const next = videos[nextIndex];
-        next.currentTime = cleanStart;
-        next.play().catch(() => {});
-        next.classList.add('is-visible');
-        setTimeout(() => {
-          current.classList.remove('is-visible');
-          current.pause();
-          current.currentTime = cleanStart;
-          active = nextIndex;
-          transitioning = false;
-        }, fadeSeconds * 1000);
+
+    function makeDust() {
+      return {
+        x: Math.random(),
+        y: Math.random(),
+        r: .3 + Math.random() * 1.2,
+        phase: Math.random() * Math.PI * 2,
+        speed: .0004 + Math.random() * .0012,
+        warm: Math.random() > .86
+      };
+    }
+
+    function resize() {
+      width = innerWidth;
+      height = innerHeight;
+      dpr = Math.min(devicePixelRatio || 1, 2.5);
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const area = width * height;
+      particles = Array.from({ length: Math.min(620, Math.max(280, Math.round(area / 2200))) }, (_, i) => makeParticle(i));
+      dust = Array.from({ length: Math.min(240, Math.max(110, Math.round(area / 6500))) }, makeDust);
+    }
+
+    function drawBackground() {
+      const bg = ctx.createRadialGradient(width * .62, height * .48, 0, width * .5, height * .5, Math.max(width, height) * .82);
+      bg.addColorStop(0, '#0c3852');
+      bg.addColorStop(.22, '#071f37');
+      bg.addColorStop(.58, '#03101f');
+      bg.addColorStop(1, '#01040b');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, width, height);
+    }
+
+    function pointOnSpiral(p, arm, rotation, offset = 0) {
+      const portrait = height > width;
+      const cx = width * (portrait ? .54 : .61);
+      const cy = height * (portrait ? .47 : .50);
+      const maxRadius = Math.hypot(width, height) * (portrait ? .39 : .46);
+      const radius = 8 + Math.pow(p, .84) * maxRadius;
+      const angle = arm * Math.PI * 2 / 9 + p * 10.8 + rotation + offset;
+      const squash = portrait ? .78 : .62;
+      return {
+        x: cx + Math.cos(angle) * radius,
+        y: cy + Math.sin(angle) * radius * squash,
+        cx, cy
+      };
+    }
+
+    function drawTrails(time) {
+      const rotation = time * .00012;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineCap = 'round';
+      for (let arm = 0; arm < 9; arm++) {
+        ctx.beginPath();
+        for (let i = 0; i <= 150; i++) {
+          const p = i / 150;
+          const pt = pointOnSpiral(p, arm, rotation, Math.sin(time * .00045 + arm) * .018);
+          if (!i) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
+        }
+        const warm = arm % 3 === 0 || arm % 5 === 0;
+        ctx.strokeStyle = warm ? 'rgba(255,184,83,.27)' : 'rgba(119,223,255,.22)';
+        ctx.lineWidth = arm % 3 === 0 ? 2.1 : 1.1;
+        ctx.shadowBlur = warm ? 13 : 9;
+        ctx.shadowColor = warm ? '#ffae4b' : '#5edfff';
+        ctx.stroke();
       }
-      requestAnimationFrame(tick);
+      ctx.restore();
     }
-    videos[0].addEventListener('loadedmetadata', begin, { once: true });
-    if (videos[0].readyState >= 1) begin();
+
+    function drawParticles(time) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const particle of particles) {
+        particle.progress += particle.speed;
+        if (particle.progress > 1) particle.progress -= 1;
+        const rotation = time * .00012;
+        const pt = pointOnSpiral(particle.progress, particle.arm, rotation, particle.offset);
+        const pulse = .62 + Math.sin(time * .003 + particle.progress * 18) * .38;
+        const alpha = particle.alpha * pulse;
+        const radius = particle.size * (.6 + particle.progress * .75);
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, radius, 0, Math.PI * 2);
+        ctx.fillStyle = particle.warm ? `rgba(255,193,104,${alpha})` : `rgba(173,236,255,${alpha})`;
+        ctx.shadowBlur = radius * 5;
+        ctx.shadowColor = particle.warm ? '#ffc06c' : '#7ae8ff';
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawDust(time) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'screen';
+      for (const star of dust) {
+        const alpha = .25 + (Math.sin(time * star.speed + star.phase) + 1) * .3;
+        ctx.beginPath();
+        ctx.arc(star.x * width, star.y * height, star.r, 0, Math.PI * 2);
+        ctx.fillStyle = star.warm ? `rgba(255,203,133,${alpha})` : `rgba(213,244,255,${alpha})`;
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    function drawCore(time) {
+      const portrait = height > width;
+      const cx = width * (portrait ? .54 : .61);
+      const cy = height * (portrait ? .47 : .50);
+      const radius = Math.min(width, height) * (.13 + Math.sin(time * .0012) * .008);
+      const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, radius);
+      glow.addColorStop(0, 'rgba(255,255,255,.98)');
+      glow.addColorStop(.08, 'rgba(191,245,255,.92)');
+      glow.addColorStop(.28, 'rgba(72,205,255,.42)');
+      glow.addColorStop(1, 'rgba(20,110,180,0)');
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = glow;
+      ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
+      ctx.restore();
+    }
+
+    function render(time) {
+      drawBackground();
+      drawDust(time);
+      drawTrails(time);
+      drawParticles(time);
+      drawCore(time);
+      requestAnimationFrame(render);
+    }
+
+    addEventListener('resize', resize, { passive: true });
+    resize();
+    requestAnimationFrame(render);
   </script>
 </body>
 </html>
