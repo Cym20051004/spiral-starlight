@@ -36,96 +36,86 @@
       height: 100%;
       object-fit: fill;
       transform: translate(-50%, -50%);
-      opacity: 0;
-      transition: opacity .72s linear;
-      will-change: opacity;
       filter: contrast(1.04) saturate(1.06);
     }
-    .video-layer.visible { opacity: 1; }
     .hint {
       position: absolute;
       inset: 0;
-      display: none;
+      display: grid;
       place-items: center;
       color: rgba(255,255,255,.9);
-      font: 14px/1.4 system-ui, sans-serif;
-      background: rgba(2,8,18,.42);
+      border: 0;
+      color: white;
+      font: 600 15px/1.4 system-ui, sans-serif;
+      background: rgba(2,8,18,.38);
       z-index: 3;
+      cursor: pointer;
     }
-    .hint.show { display: grid; }
+    .hint[hidden] { display: none; }
+    .play-pill {
+      padding: 12px 18px;
+      border: 1px solid rgba(255,255,255,.55);
+      border-radius: 999px;
+      background: rgba(2,12,25,.66);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 8px 28px rgba(0,0,0,.25);
+    }
   </style>
 </head>
 <body>
   <main class="stage" id="stage" aria-label="蓝金色螺旋光芒动态作品">
-    <video id="videoA" class="video-layer" autoplay muted playsinline webkit-playsinline preload="auto">
+    <video id="video" class="video-layer" autoplay muted playsinline webkit-playsinline preload="auto" poster="spiral-light.jpg">
       <source src="spiral-light.mp4" type="video/mp4">
     </video>
-    <video id="videoB" class="video-layer" muted playsinline webkit-playsinline preload="auto">
-      <source src="spiral-light.mp4" type="video/mp4">
-    </video>
-    <div id="hint" class="hint">轻触画面开始播放</div>
+    <button id="hint" class="hint" type="button" aria-label="开始播放">
+      <span class="play-pill">▶ 轻触播放</span>
+    </button>
   </main>
 
   <script>
     const START = 3.65;
     const END = 6.15;
-    const FADE = .72;
-    const videos = [document.getElementById('videoA'), document.getElementById('videoB')];
-    const stage = document.getElementById('stage');
+    const video = document.getElementById('video');
     const hint = document.getElementById('hint');
-    let active = 0;
-    let switching = false;
-    let started = false;
 
-    async function playVideo(video) {
-      video.muted = true;
-      try {
-        await video.play();
-        hint.classList.remove('show');
-        return true;
-      } catch {
-        hint.classList.add('show');
-        return false;
+    function resetPosition() {
+      if (video.duration && (video.currentTime < START || video.currentTime >= END)) {
+        video.currentTime = START;
       }
     }
 
     async function start() {
-      if (started) return;
-      started = true;
-      videos[0].currentTime = START;
-      videos[0].classList.add('visible');
-      if (!await playVideo(videos[0])) started = false;
-      requestAnimationFrame(loop);
-    }
-
-    function loop() {
-      const current = videos[active];
-      if (!switching && current.currentTime >= END - FADE) {
-        switching = true;
-        const nextIndex = active ? 0 : 1;
-        const next = videos[nextIndex];
-        next.currentTime = START;
-        playVideo(next);
-        next.classList.add('visible');
-        setTimeout(() => {
-          current.classList.remove('visible');
-          current.pause();
-          current.currentTime = START;
-          active = nextIndex;
-          switching = false;
-        }, FADE * 1000);
+      video.muted = true;
+      resetPosition();
+      try {
+        await video.play();
+        hint.hidden = true;
+      } catch {
+        hint.hidden = false;
       }
-      requestAnimationFrame(loop);
     }
 
-    videos[0].addEventListener('loadedmetadata', start, { once: true });
-    if (videos[0].readyState >= 1) start();
-    stage.addEventListener('click', () => {
-      started = false;
+    video.addEventListener('timeupdate', () => {
+      if (video.currentTime >= END) {
+        video.currentTime = START;
+        video.play().catch(() => { hint.hidden = false; });
+      }
+    });
+    video.addEventListener('loadedmetadata', () => { video.currentTime = START; start(); }, { once: true });
+    video.addEventListener('canplay', start, { once: true });
+    video.addEventListener('playing', () => { hint.hidden = true; });
+    video.addEventListener('error', () => {
+      hint.hidden = false;
+      hint.querySelector('.play-pill').textContent = '点击重新加载';
+    });
+    hint.addEventListener('click', () => {
+      video.load();
+      video.addEventListener('canplay', start, { once: true });
       start();
     });
+    if (video.readyState >= 1) start();
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) playVideo(videos[active]);
+      if (!document.hidden) start();
     });
   </script>
 </body>
